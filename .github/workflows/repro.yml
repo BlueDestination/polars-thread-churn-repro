@@ -1,0 +1,81 @@
+name: repro
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  repro:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: environment
+        shell: bash
+        run: |
+          uv run --python 3.13 --with polars==2.1.0 python -c "import platform, sys, polars; print(platform.platform(), '|', sys.version.split()[0], '| polars', polars.__version__)"
+      - name: run repro
+        shell: bash
+        env:
+          PYTHONFAULTHANDLER: '1'
+        run: |
+          uv run --python 3.13 --with polars==2.1.0 python repro.py --rounds 1000 2>&1 | tee crash.log
+          code=${PIPESTATUS[0]}
+          echo "exit code: $code"
+          {
+            echo "### ${{ matrix.os }} / polars 2.1.0 / exit $code"
+            echo '```'
+            tail -n 30 crash.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-${{ matrix.os }}
+          path: crash.log
+
+  control:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: run repro with polars preloaded on the main thread
+        shell: bash
+        run: uv run --python 3.13 --with polars==2.1.0 python repro.py --preload --rounds 1000
+
+  versions:
+    strategy:
+      fail-fast: false
+      matrix:
+        polars: ['1.44.2', '2.0.0', '2.1.0']
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: run repro
+        shell: bash
+        env:
+          PYTHONFAULTHANDLER: '1'
+        run: |
+          uv run --python 3.13 --with polars==${{ matrix.polars }} python repro.py --rounds 1000 2>&1 | tee crash.log
+          code=${PIPESTATUS[0]}
+          echo "exit code: $code"
+          {
+            echo "### windows-latest / polars ${{ matrix.polars }} / exit $code"
+            echo '```'
+            tail -n 30 crash.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
