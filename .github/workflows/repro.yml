@@ -18,22 +18,29 @@ jobs:
       - name: environment
         shell: bash
         run: |
+          set +e
           uv run --python 3.13 --with polars==2.1.0 python -c "import platform, sys, polars; print(platform.platform(), '|', sys.version.split()[0], '| polars', polars.__version__)"
       - name: run repro
         shell: bash
         env:
           PYTHONFAULTHANDLER: '1'
         run: |
-          uv run --python 3.13 --with polars==2.1.0 python repro.py --rounds 1000 2>&1 | tee crash.log
+          set +e
+          uv run --python 3.13 --with polars==2.1.0 python repro.py --rounds 3000 2>&1 | tee crash.log
           code=${PIPESTATUS[0]}
-          echo "exit code: $code"
+          round=$(grep -E '^[0-9]+$' crash.log | tail -1)
+          echo "exit code: ${code}, last round: ${round}"
           {
-            echo "### ${{ matrix.os }} / polars 2.1.0 / exit $code"
+            echo "### repro / ${{ matrix.os }} / polars 2.1.0"
+            echo ""
+            echo "- exit code: ${code}"
+            echo "- last round before exit: ${round}"
+            echo ""
             echo '```'
-            tail -n 30 crash.log
+            tail -n 25 crash.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+          exit "${code}"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -52,7 +59,16 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: run repro with polars preloaded on the main thread
         shell: bash
-        run: uv run --python 3.13 --with polars==2.1.0 python repro.py --preload --rounds 1000
+        run: |
+          set +e
+          uv run --python 3.13 --with polars==2.1.0 python repro.py --preload --rounds 3000
+          code=$?
+          {
+            echo "### control / ${{ matrix.os }} / polars 2.1.0 / --preload"
+            echo ""
+            echo "- exit code: ${code} (0 = no crash)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${code}"
 
   versions:
     strategy:
@@ -64,18 +80,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
+      - name: environment
+        shell: bash
+        run: |
+          set +e
+          uv run --python 3.13 --with polars==${{ matrix.polars }} python -c "import platform, sys, polars; print(platform.platform(), '|', sys.version.split()[0], '| polars', polars.__version__)"
       - name: run repro
         shell: bash
         env:
           PYTHONFAULTHANDLER: '1'
         run: |
-          uv run --python 3.13 --with polars==${{ matrix.polars }} python repro.py --rounds 1000 2>&1 | tee crash.log
+          set +e
+          uv run --python 3.13 --with polars==${{ matrix.polars }} python repro.py --rounds 3000 2>&1 | tee crash.log
           code=${PIPESTATUS[0]}
-          echo "exit code: $code"
+          round=$(grep -E '^[0-9]+$' crash.log | tail -1)
+          echo "exit code: ${code}, last round: ${round}"
           {
-            echo "### windows-latest / polars ${{ matrix.polars }} / exit $code"
+            echo "### versions / windows-latest / polars ${{ matrix.polars }}"
+            echo ""
+            echo "- exit code: ${code}"
+            echo "- last round before exit: ${round}"
+            echo ""
             echo '```'
-            tail -n 30 crash.log
+            tail -n 25 crash.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+          exit "${code}"
