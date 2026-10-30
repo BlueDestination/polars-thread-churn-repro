@@ -27,12 +27,12 @@ exists) makes the crash disappear, which points at thread-affine initialisation 
 
 | job | what it shows | observed |
 | --- | --- | --- |
-| `repro` (windows-latest) | first import in a dying thread + reads from fresh threads | access violation, ~470 rounds in |
+| `repro` (windows-latest) | first import in a dying thread + reads from fresh threads | access violation, exit 139, crash at round ~231 |
 | `repro` (ubuntu-latest, macos-latest) | same script, same polars | 3000 rounds, no crash |
 | `control` (all platforms) | same script with `--preload` | no crash |
 | `versions` (windows-latest) | `1.44.2`, `2.0.0`, `2.1.0` | all three crash |
 
-The crashing round depends on the machine (196 locally, ~470 on CI), so the script
+The crashing round depends on the machine (196 on a local Windows 11 box, 231 on CI), so the script
 runs up to 3000 rounds by default.
 
 Re-run everything with the **Re-run all jobs** button on any workflow run, or run locally:
